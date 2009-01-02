@@ -1,0 +1,23 @@
+=CHANGE LOG
+
+=====0.1.2 -- 2008/12/30
+- Fixed bug in ActiveRecord::ConnectionAdapters::SQLAnywhereAdapter#table_structure SQL (Paul Smith)
+- Added options for :commlinks and :connection_name to database.yml configuration (Paul Smith)
+- Fixed ActiveRecord::ConnectionAdapters::SQLAnywhereColumn.string_to_binary and binary_to_string  (Paul Smith)
+- Added :time as a native datatype  (Paul Smith)
+- Override SQLAnywhereAdapter#active? to prevent stale connections  (Paul Smith)
+- 'Fixed' coding style to match Rails standards  (Paul Smith)
+- Added temporary option for timestamp_format
+- Fixed bug to let migrations drop columns with indexes
+- Formatted code
+- Fixed bug to raise proper exceptions when a query with a bad column in executed
+
+=====0.1.1 -- 2008/11/06
+- Changed file permissions on archives
+- Changed archives to be specific to platform (.zip on windows, .tar.gz
+otherwise)
+- Removed the default rake task
+
+=====0.1.0 -- 2008/10/15
+- Initial Release
+
