@@ -11,7 +11,7 @@ This driver is licensed under the Apache License, Version 2.
 
 The official code repository is located on GitHub. The repository can be cloned with:
 
-   git clone git://github.com/efarrar/activerecord-sqlanywhere-adapter.git
+   git clone git://github.com/sqlanywhere/activerecord-sqlanywhere-adapter.git
 
 
 ==Making a Connection
