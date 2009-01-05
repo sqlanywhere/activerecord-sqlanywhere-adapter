@@ -75,13 +75,13 @@ The following code is a sample database configuration object.
 
    <b>If the migration tests fail, make sure you have set up the SQL Anywhere environment variables correctly.</b> For more information review the online documentation here[http://dcx.sybase.com/index.php#http%3A%2F%2Fdcx.sybase.com%2F1100en%2Fdbadmin_en11%2Fda-envvar-sect1-3672410.html].
 
-==Explaination of Test Results
+==Explanation of Test Results
 
 As of ActiveRecord 2.2.2., it is expected that 6 tests will fail. The failed tests, along with an explaination, are identified below:
 
 1. (CalculationsTest) - test_should_sum_expression
 
-   Explaination: Appears to be an error in the test.
+   Explanation: Appears to be an error in the test.
    
    This tests checks the results of the following statement:
    
@@ -91,7 +91,7 @@ As of ActiveRecord 2.2.2., it is expected that 6 tests will fail. The failed tes
    
 2. (MigrationTest) - test_add_table_with_decimals
 
-   Explaination: Requires special case.
+   Explanation: Requires special case.
 
    From the comments regarding this test:
 
@@ -103,13 +103,13 @@ As of ActiveRecord 2.2.2., it is expected that 6 tests will fail. The failed tes
 
 3. (NamedScopeTest) - test_should_use_where_in_query_for_named_scope
 
-   Explaination: Appears to be an error in the test.
+   Explanation: Appears to be an error in the test.
 
    This test issues a query that returns two rows. Because there is no ORDER BY in the query, the order that that rows are returned in is non-deterministic. SQL Anywhere returns the correct rows, but in a different order.
 
 4. (QueryCacheTest) - test_cache_does_not_wrap_string_results_in_arrays
 
-   Explaination: Appears to be an error in the test.
+   Explanation: Appears to be an error in the test.
 
    This tests checks that the cached value of the following query is a string:
 
@@ -119,12 +119,12 @@ As of ActiveRecord 2.2.2., it is expected that 6 tests will fail. The failed tes
 
 5. (SchemaDumperTest) - test_schema_dump_includes_limit_constraint_for_integer_columns
 
-   Explaination: SQL Anywhere does not have a 'limitless' integer type.
+   Explanation: SQL Anywhere does not have a 'limitless' integer type.
 
    Any integer type will be given an implicit limit when instantiated. It would be possible to use another type such as <tt>NUMERIC</tt> to mimic this type, however this seems like a bad idea.
 
 6. (ValidationsTest) - test_validate_case_sensitive_uniqueness
 
-   Explaination: By default, SQL Anywhere is case insensitive.
+   Explanation: By default, SQL Anywhere is case insensitive.
 
    If a case sensitive database is required (as in this test), ensure the database is created with the <tt>-c</tt> switch to make it case sensitive.
