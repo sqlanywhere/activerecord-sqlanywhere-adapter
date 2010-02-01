@@ -1,6 +1,6 @@
 #====================================================
 #
-#    Copyright 2008-2009 iAnywhere Solutions, Inc.
+#    Copyright 2008-2010 iAnywhere Solutions, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@ module ActiveRecord
     # * :server (optional, defaults to :databse). Corresponds to "ServerName=" in connection string 
     # * :username (optional, default to 'dba')
     # * :password (optional, deafult to 'sql')
+    # * :encoding (optional, defaults to charset of OS)
     # * :commlinks (optional). Corresponds to "CommLinks=" in connection string
     # * :connection_name (optional). Corresponds to "ConnectionName=" in connection string
     
@@ -58,6 +59,7 @@ module ActiveRecord
       connection_string = "ServerName=#{(config[:server] || config[:database])};DatabaseName=#{config[:database]};UserID=#{config[:username]};Password=#{config[:password]};"
       connection_string += "CommLinks=#{config[:commlinks]};" unless config[:commlinks].nil?
       connection_string += "ConnectionName=#{config[:connection_name]};" unless config[:connection_name].nil?
+      connection_string += "CharSet=#{config[:encoding]};" unless config[:encoding].nil?      
       connection_string += "Idle=0" # Prevent the server from disconnecting us if we're idle for >240mins (by default)
 
       db = SA.instance.api.sqlany_new_connection()
@@ -120,7 +122,7 @@ module ActiveRecord
       end
 
       def requires_reloading?
-        false
+        true
       end
    
       def active?
@@ -366,7 +368,7 @@ module ActiveRecord
 
       # Do not return SYS-owned or DBO-owned tables
       def tables(name = nil) #:nodoc:
-          sql = "SELECT table_name FROM systable WHERE creator not in (0,3)"
+          sql = "SELECT table_name FROM SYS.SYSTABLE WHERE creator NOT IN (0,3)"
           select(sql, name).map { |row| row["table_name"] }
       end
 
@@ -378,18 +380,18 @@ module ActiveRecord
       end
 
       def indexes(table_name, name = nil) #:nodoc:
-        sql = "SELECT DISTINCT index_name, \"unique\" FROM sys.systable INNER JOIN sys.sysidxcol ON sys.systable.table_id = sys.sysidxcol.table_id INNER JOIN sys.sysidx ON sys.systable.table_id = sys.sysidx.table_id AND sys.sysidxcol.index_id = sys.sysidx.index_id WHERE table_name = '#{table_name}' AND index_category > 2"
+        sql = "SELECT DISTINCT index_name, \"unique\" FROM SYS.SYSTABLE INNER JOIN SYS.SYSIDXCOL ON SYS.SYSTABLE.table_id = SYS.SYSIDXCOL.table_id INNER JOIN SYS.SYSIDX ON SYS.SYSTABLE.table_id = SYS.SYSIDX.table_id AND SYS.SYSIDXCOL.index_id = SYS.SYSIDX.index_id WHERE table_name = '#{table_name}' AND index_category > 2"
         select(sql, name).map do |row|
           index = IndexDefinition.new(table_name, row['index_name'])
           index.unique = row['unique'] == 1
-          sql = "SELECT column_name FROM sys.sysidx INNER JOIN sys.sysidxcol ON sys.sysidxcol.table_id = sys.sysidx.table_id AND sys.sysidxcol.index_id = sys.sysidx.index_id INNER JOIN sys.syscolumn ON sys.syscolumn.table_id = sys.sysidxcol.table_id AND sys.syscolumn.column_id = sys.sysidxcol.column_id WHERE index_name = '#{row['index_name']}'"	
+          sql = "SELECT column_name FROM SYS.SYSIDX INNER JOIN SYS.SYSIDXCOL ON SYS.SYSIDXCOL.table_id = SYS.SYSIDX.table_id AND SYS.SYSIDXCOL.index_id = SYS.SYSIDX.index_id INNER JOIN SYS.SYSCOLUMN ON SYS.SYSCOLUMN.table_id = SYS.SYSIDXCOL.table_id AND SYS.SYSCOLUMN.column_id = SYS.SYSIDXCOL.column_id WHERE index_name = '#{row['index_name']}'"	
           index.columns = select(sql).map { |col| col['column_name'] }
           index
         end
       end
 
       def primary_key(table_name) #:nodoc:
-        sql = "SELECT sys.systabcol.column_name FROM (sys.systable JOIN sys.systabcol) LEFT OUTER JOIN (sys.sysidxcol JOIN sys.sysidx) WHERE table_name = '#{table_name}' AND sys.sysidxcol.sequence = 0"
+        sql = "SELECT SYS.SYSTABCOL.column_name FROM (SYS.SYSTABLE JOIN SYS.SYSTABCOL) LEFT OUTER JOIN (SYS.SYSIDXCOL JOIN SYS.SYSIDX) WHERE table_name = '#{table_name}' AND SYS.SYSIDXCOL.sequence = 0"
         rs = select(sql)
         if !rs.nil? and !rs[0].nil?
           rs[0]['column_name']
@@ -517,22 +519,22 @@ module ActiveRecord
 
         def table_structure(table_name)
           sql = <<-SQL
-SELECT sys.syscolumn.column_name AS name, 
-  NULLIF(sys.syscolumn."default", 'autoincrement') AS "default",
-  IF sys.syscolumn.domain_id IN (7,8,9,11,33,34,35,3,27) THEN
-    IF sys.syscolumn.domain_id IN (3,27) THEN
-      sys.sysdomain.domain_name || '(' || sys.syscolumn.width || ',' || sys.syscolumn.scale || ')'
+SELECT SYS.SYSCOLUMN.column_name AS name, 
+  NULLIF(SYS.SYSCOLUMN."default", 'autoincrement') AS "default",
+  IF SYS.SYSCOLUMN.domain_id IN (7,8,9,11,33,34,35,3,27) THEN
+    IF SYS.SYSCOLUMN.domain_id IN (3,27) THEN
+      SYS.SYSDOMAIN.domain_name || '(' || SYS.SYSCOLUMN.width || ',' || SYS.SYSCOLUMN.scale || ')'
     ELSE
-      sys.sysdomain.domain_name || '(' || sys.syscolumn.width || ')'
+      SYS.SYSDOMAIN.domain_name || '(' || SYS.SYSCOLUMN.width || ')'
     ENDIF
   ELSE
-    sys.sysdomain.domain_name 
+    SYS.SYSDOMAIN.domain_name 
   ENDIF AS domain, 
-  IF sys.syscolumn.nulls = 'Y' THEN 1 ELSE 0 ENDIF AS nulls
+  IF SYS.SYSCOLUMN.nulls = 'Y' THEN 1 ELSE 0 ENDIF AS nulls
 FROM 
-  sys.syscolumn 
-  INNER JOIN sys.systable ON sys.syscolumn.table_id = sys.systable.table_id 
-  INNER JOIN sys.sysdomain ON sys.syscolumn.domain_id = sys.sysdomain.domain_id
+  SYS.SYSCOLUMN 
+  INNER JOIN SYS.SYSTABLE ON SYS.SYSCOLUMN.table_id = SYS.SYSTABLE.table_id 
+  INNER JOIN SYS.SYSDOMAIN ON SYS.SYSCOLUMN.domain_id = SYS.SYSDOMAIN.domain_id
 WHERE
   table_name = '#{table_name}'
 SQL

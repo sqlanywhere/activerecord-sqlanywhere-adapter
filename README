@@ -9,11 +9,6 @@ This driver is designed for use with ActiveRecord 2.0.2 and greater.
 
 This driver is licensed under the Apache License, Version 2.
 
-The official code repository is located on GitHub. The repository can be cloned with:
-
-   git clone git://github.com/sqlanywhere/activerecord-sqlanywhere-adapter.git
-
-
 ==Making a Connection
 
 The following code is a sample database configuration object.
@@ -21,12 +16,13 @@ The following code is a sample database configuration object.
   ActiveRecord::Base.configurations = {
     'arunit' => {
       :adapter  => 'sqlanywhere', 
-      :database => 'arunit',      #equivalent to the "DatabaseName" parameter
-      :server   => 'arunit',      #equivalent to the "ServerName" parameter
-      :username => 'dba',         #equivalent to the "UserID" parameter
-      :password => 'sql',         #equivalent to the "Password" parameter
-      :commlinks => 'TCPIP()',    #equivalent to the "Commlinks" parameter
-      :connection_name => 'Rails' #equivalent to the "ConnectionName" parameter
+      :database => 'arunit',       #equivalent to the "DatabaseName" parameter
+      :server   => 'arunit',       #equivalent to the "ServerName" parameter
+      :username => 'dba',          #equivalent to the "UserID" parameter
+      :password => 'sql',          #equivalent to the "Password" parameter
+      :encoding => 'Windows-1252', #equivalent to the "CharSet" parameter
+      :commlinks => 'TCPIP()',     #equivalent to the "Commlinks" parameter
+      :connection_name => 'Rails'  #equivalent to the "ConnectionName" parameter
   }
 
 ==Running the ActiveRecord Unit Test Suite
@@ -75,13 +71,13 @@ The following code is a sample database configuration object.
 
    <b>If the migration tests fail, make sure you have set up the SQL Anywhere environment variables correctly.</b> For more information review the online documentation here[http://dcx.sybase.com/index.php#http%3A%2F%2Fdcx.sybase.com%2F1100en%2Fdbadmin_en11%2Fda-envvar-sect1-3672410.html].
 
-==Explanation of Test Results
+==Explaination of Test Results
 
 As of ActiveRecord 2.2.2., it is expected that 6 tests will fail. The failed tests, along with an explaination, are identified below:
 
 1. (CalculationsTest) - test_should_sum_expression
 
-   Explanation: Appears to be an error in the test.
+   Explaination: Appears to be an error in the test.
    
    This tests checks the results of the following statement:
    
@@ -91,7 +87,7 @@ As of ActiveRecord 2.2.2., it is expected that 6 tests will fail. The failed tes
    
 2. (MigrationTest) - test_add_table_with_decimals
 
-   Explanation: Requires special case.
+   Explaination: Requires special case.
 
    From the comments regarding this test:
 
@@ -103,13 +99,13 @@ As of ActiveRecord 2.2.2., it is expected that 6 tests will fail. The failed tes
 
 3. (NamedScopeTest) - test_should_use_where_in_query_for_named_scope
 
-   Explanation: Appears to be an error in the test.
+   Explaination: Appears to be an error in the test.
 
    This test issues a query that returns two rows. Because there is no ORDER BY in the query, the order that that rows are returned in is non-deterministic. SQL Anywhere returns the correct rows, but in a different order.
 
 4. (QueryCacheTest) - test_cache_does_not_wrap_string_results_in_arrays
 
-   Explanation: Appears to be an error in the test.
+   Explaination: Appears to be an error in the test.
 
    This tests checks that the cached value of the following query is a string:
 
@@ -119,12 +115,12 @@ As of ActiveRecord 2.2.2., it is expected that 6 tests will fail. The failed tes
 
 5. (SchemaDumperTest) - test_schema_dump_includes_limit_constraint_for_integer_columns
 
-   Explanation: SQL Anywhere does not have a 'limitless' integer type.
+   Explaination: SQL Anywhere does not have a 'limitless' integer type.
 
    Any integer type will be given an implicit limit when instantiated. It would be possible to use another type such as <tt>NUMERIC</tt> to mimic this type, however this seems like a bad idea.
 
 6. (ValidationsTest) - test_validate_case_sensitive_uniqueness
 
-   Explanation: By default, SQL Anywhere is case insensitive.
+   Explaination: By default, SQL Anywhere is case insensitive.
 
    If a case sensitive database is required (as in this test), ensure the database is created with the <tt>-c</tt> switch to make it case sensitive.

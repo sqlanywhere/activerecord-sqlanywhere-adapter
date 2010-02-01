@@ -1,6 +1,6 @@
 #====================================================
 #
-#    Copyright 2008-2009 iAnywhere Solutions, Inc.
+#    Copyright 2008-2010 iAnywhere Solutions, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ require 'rubygems/builder'
 PACKAGE_NAME = "activerecord-sqlanywhere-adapter"
 ARCH=Config::CONFIG['arch']
 
-pkg_version = "0.1.2"
+pkg_version = "0.1.3"
 
 spec = Gem::Specification.new do |spec|
   spec.authors = ["Eric Farrar"]
