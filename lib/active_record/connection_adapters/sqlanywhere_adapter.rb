@@ -23,6 +23,7 @@
 #====================================================
 
 require 'active_record/connection_adapters/abstract_adapter'
+require 'arel/visitors/sqlanywhere.rb'
 
 # Singleton class to hold a valid instance of the SQLAnywhereInterface across all connections
 class SA
@@ -30,7 +31,7 @@ class SA
   attr_accessor :api
 
   def initialize
-    require_library_or_gem 'sqlanywhere' unless defined? SQLAnywhere
+    require 'sqlanywhere' unless defined? SQLAnywhere
     @api = SQLAnywhere::SQLAnywhereInterface.new()
     raise LoadError, "Could not load SQLAnywhere DBCAPI library" if SQLAnywhere::API.sqlany_initialize_interface(@api) == 0 
     raise LoadError, "Could not initialize SQLAnywhere DBCAPI library" if @api.sqlany_init() == 0 
@@ -69,6 +70,17 @@ module ActiveRecord
   end
 
   module ConnectionAdapters
+    class SQLAnywhereException < StandardError
+      attr_reader :errno
+      attr_reader :sql
+
+      def initialize(message, errno, sql)
+        super(message)
+        @errno = errno
+        @sql = sql
+      end
+    end
+  
     class SQLAnywhereColumn < Column
       private
         # Overridden to handle SQL Anywhere integer, varchar, binary, and timestamp types
@@ -83,10 +95,14 @@ module ActiveRecord
 
         def extract_limit(sql_type)
           case sql_type
-            when /^tinyint/i:  1
-            when /^smallint/i: 2
-            when /^integer/i:  4            
-            when /^bigint/i:   8  
+            when /^tinyint/i
+	      1
+            when /^smallint/i 
+              2
+            when /^integer/i  
+              4            
+            when /^bigint/i   
+              8  
             else super
           end
         end
@@ -105,7 +121,7 @@ module ActiveRecord
     end
 
     class SQLAnywhereAdapter < AbstractAdapter
-      def initialize( connection, logger = nil, connection_string = "") #:nodoc:
+      def initialize( connection, logger, connection_string = "") #:nodoc:
         super(connection, logger)
         @auto_commit = true
         @affected_rows = 0
@@ -187,7 +203,7 @@ module ActiveRecord
           when String, ActiveSupport::Multibyte::Chars
             value_S = value.to_s
             if column && column.type == :binary && column.class.respond_to?(:string_to_binary)
-              "#{quoted_string_prefix}'#{column.class.string_to_binary(value_S)}'"
+              "'#{column.class.string_to_binary(value_S)}'"
             else
                super(value, column)
             end
@@ -205,76 +221,53 @@ module ActiveRecord
       end
 
      
-      # SQL Anywhere, in accordance with the SQL Standard, does not allow a column to appear in the ORDER BY list
-      # that is not also in the SELECT with when obtaining DISTINCT rows beacuse the actual semantics of this query
-      # are unclear. The following functions create a query that mimics the way that SQLite and MySQL handle this query.
-      #
-      # This function (distinct) is based on the Oracle ActiveRecord driver created by Graham Jenkins (2005)
-      # (http://svn.rubyonrails.org/rails/adapters/oracle/lib/active_record/connection_adapters/oracle_adapter.rb)
-      def distinct(columns, order_by)
+      # This function (distinct) is based on the Oracle Enhacned ActiveRecord driver maintained by Raimonds Simanovskis (2010)
+      # (https://github.com/rsim/oracle-enhanced)
+      def distinct(columns, order_by) #:nodoc:
         return "DISTINCT #{columns}" if order_by.blank?
-        order_columns = order_by.split(',').map { |s| s.strip }.reject(&:blank?)
+
+        # construct a valid DISTINCT clause, ie. one that includes the ORDER BY columns, using
+        # FIRST_VALUE such that the inclusion of these columns doesn't invalidate the DISTINCT
+        order_columns = if order_by.is_a?(String)
+          order_by.split(',').map { |s| s.strip }.reject(&:blank?)
+        else # in latest ActiveRecord versions order_by is already Array
+          order_by
+        end
         order_columns = order_columns.zip((0...order_columns.size).to_a).map do |c, i|
-          "FIRST_VALUE(#{c.split.first}) OVER (PARTITION BY #{columns} ORDER BY #{c}) AS alias_#{i}__"
+          # remove any ASC/DESC modifiers
+          value = c =~ /^(.+)\s+(ASC|DESC)\s*$/i ? $1 : c
+          "FIRST_VALUE(#{value}) OVER (PARTITION BY #{columns} ORDER BY #{c}) AS alias_#{i}__"
         end
         sql = "DISTINCT #{columns}, "
         sql << order_columns * ", "
-      end      
-
-      # This function (add_order_by_for_association_limiting) is based on the Oracle ActiveRecord driver created by Graham Jenkins (2005)
-      # (http://svn.rubyonrails.org/rails/adapters/oracle/lib/active_record/connection_adapters/oracle_adapter.rb)    
-      def add_order_by_for_association_limiting!(sql, options)
-        return sql if options[:order].blank?
-
-        order = options[:order].split(',').collect { |s| s.strip }.reject(&:blank?)
-        order.map! {|s| $1 if s =~ / (.*)/}
-        order = order.zip((0...order.size).to_a).map { |s,i| "alias_#{i}__ #{s}" }.join(', ')
-
-        sql << " ORDER BY #{order}"
-      end
+      end  
 
       # The database execution function
       def execute(sql, name = nil) #:nodoc:
-        return if sql.nil?
-        sql = modify_limit_offset(sql)
+	if name == :skip_logging
+	  query(sql)
+	else
+          log(sql, name) { query(sql) }
+        end        
+      end
 
-        # ActiveRecord allows a query to return TOP 0. SQL Anywhere requires that the TOP value is a positive integer.
-        return Array.new() if sql =~ /TOP 0/i
-           
-        # Executes the query, iterates through the results, and builds an array of hashes.
-        rs = SA.instance.api.sqlany_execute_direct(@connection, sql)
-        if rs.nil?
-          error = SA.instance.api.sqlany_error(@connection)
-          case error[0].to_i
+      def translate_exception(exception, message)
+        case exception.errno
           when -143
-            if sql =~ /^SELECT/i then
-              raise ActiveRecord::StatementInvalid.new("#{error}:#{sql}")
+            if exception.sql !~ /^SELECT/i then
+	      raise ActiveRecord::ActiveRecordError.new(message)
             else
-              raise ActiveRecord::ActiveRecordError.new("#{error}:#{sql}")
+              super
             end
+          when -194
+            raise InvalidForeignKey.new(message, exception)
+          when -196
+            raise RecordNotUnique.new(message, exception)
+          when -183
+            raise ArgumentError, message
           else
-            raise ActiveRecord::StatementInvalid.new("#{error}:#{sql}")
-          end
+            super
         end
-        
-        record = []
-        if( SA.instance.api.sqlany_num_cols(rs) > 0 ) 
-          while SA.instance.api.sqlany_fetch_next(rs) == 1
-            max_cols = SA.instance.api.sqlany_num_cols(rs)
-            result = Hash.new()
-            max_cols.times do |cols|
-              result[SA.instance.api.sqlany_get_column_info(rs, cols)[2]] = SA.instance.api.sqlany_get_column(rs, cols)[1]
-            end
-            record << result
-          end
-          @affected_rows = 0
-        else
-          @affected_rows = SA.instance.api.sqlany_affected_rows(rs)
-        end 
-        SA.instance.api.sqlany_free_stmt(rs)
-
-        SA.instance.api.sqlany_commit(@connection) if @auto_commit
-        return record
       end
 
       # The database update function.         
@@ -356,10 +349,12 @@ module ActiveRecord
                 column_type_sql = 'bigint'
               else
                 column_type_sql = 'integer'
-              end
+            end
                column_type_sql
-            else
-              super(type, limit, precision, scale)
+          elsif type == :string and !limit.nil?
+             "varchar (#{limit} character)"
+	  else 
+            super(type, limit, precision, scale)
           end
         else
           super(type, limit, precision, scale)
@@ -401,15 +396,11 @@ module ActiveRecord
       end
 
       def remove_index(table_name, options={}) #:nodoc:
-        execute "DROP INDEX #{table_name}.#{quote_column_name(index_name(table_name, options))}"
+        execute "DROP INDEX #{quote_table_name(table_name)}.#{quote_column_name(index_name(table_name, options))}"
       end
 
       def rename_table(name, new_name)
         execute "ALTER TABLE #{quote_table_name(name)} RENAME #{quote_table_name(new_name)}"
-      end
-
-      def remove_column(table_name, column_name) #:nodoc:
-        execute "ALTER TABLE #{quote_table_name(table_name)} DROP #{quote_column_name(column_name)}"
       end
 
       def change_column_default(table_name, column_name, default) #:nodoc:
@@ -501,7 +492,7 @@ module ActiveRecord
             select_components = modified_sql.scan(/\ASELECT\s+(DISTINCT)?(.*?)(?:\s+LIMIT\s+(.*?))?(?:\s+OFFSET\s+(.*?))?\Z/xmi)
             return modified_sql if select_components[0].nil?
             final_sql = "SELECT #{select_components[0][0]} "
-            final_sql << "TOP #{select_components[0][2]} " unless select_components[0][2].nil?
+            final_sql << "TOP #{select_components[0][2].nil? ? 1000000 : select_components[0][2]} " 
             final_sql << "START AT #{(select_components[0][3].to_i + 1).to_s} " unless select_components[0][3].nil?
             final_sql << "#{select_components[0][1]}"
             return final_sql
@@ -538,9 +529,9 @@ FROM
 WHERE
   table_name = '#{table_name}'
 SQL
-          returning structure = select(sql) do       
-            raise(ActiveRecord::StatementInvalid, "Could not find table '#{table_name}'") if false
-          end
+          structure = execute(sql, :skip_logging)
+          raise(ActiveRecord::StatementInvalid, "Could not find table '#{table_name}'") if structure == false
+          structure
         end
         
         # Required to prevent DEFAULT NULL being added to primary keys
@@ -563,8 +554,43 @@ SQL
         def set_connection_options
           SA.instance.api.sqlany_execute_immediate(@connection, "SET TEMPORARY OPTION non_keywords = 'LOGIN'") rescue nil
           SA.instance.api.sqlany_execute_immediate(@connection, "SET TEMPORARY OPTION timestamp_format = 'YYYY-MM-DD HH:NN:SS'") rescue nil
+          #SA.instance.api.sqlany_execute_immediate(@connection, "SET OPTION reserved_keywords = 'LIMIT'") rescue nil
           # The liveness variable is used a low-cost "no-op" to test liveness
           SA.instance.api.sqlany_execute_immediate(@connection, "CREATE VARIABLE liveness INT") rescue nil
+        end
+
+        def query(sql)
+          return if sql.nil?
+          #sql = modify_limit_offset(sql)
+
+          # ActiveRecord allows a query to return TOP 0. SQL Anywhere requires that the TOP value is a positive integer.
+          return Array.new() if sql =~ /TOP 0/i
+
+          # Executes the query, iterates through the results, and builds an array of hashes.
+          rs = SA.instance.api.sqlany_execute_direct(@connection, sql)
+          if rs.nil?
+            result, errstr = SA.instance.api.sqlany_error(@connection)
+            raise SQLAnywhereException.new(errstr, result, sql)
+          end
+        
+          record = []
+          if( SA.instance.api.sqlany_num_cols(rs) > 0 ) 
+            while SA.instance.api.sqlany_fetch_next(rs) == 1
+              max_cols = SA.instance.api.sqlany_num_cols(rs)
+              result = Hash.new()
+              max_cols.times do |cols|
+                result[SA.instance.api.sqlany_get_column_info(rs, cols)[2]] = SA.instance.api.sqlany_get_column(rs, cols)[1]
+              end
+              record << result
+            end
+            @affected_rows = 0
+          else
+            @affected_rows = SA.instance.api.sqlany_affected_rows(rs)
+          end 
+          SA.instance.api.sqlany_free_stmt(rs)
+
+          SA.instance.api.sqlany_commit(@connection) if @auto_commit
+          return record
         end
     end
   end

@@ -5,7 +5,7 @@ native SQL Anywhere Ruby driver. To get the native driver, use:
 
    gem install sqlanywhere
 
-This driver is designed for use with ActiveRecord 2.0.2 and greater.
+This driver is designed for use with ActiveRecord 3.0.3 and greater.
 
 This driver is licensed under the Apache License, Version 2.
 
@@ -41,14 +41,6 @@ The following code is a sample database configuration object.
 
 3. Copy <tt>test/connection.rb</tt> into the newly created directory.
 
-   NOTE: If using ActiveRecord 2.0.2, change the second line of the file from:
-  
-      require_dependency 'models/course'
-
-   to:
-
-      require_dependency 'fixtures/course'
-
 4. Create the two test databases. These can be created in any directory.
 
       dbinit -c arunit
@@ -57,70 +49,8 @@ The following code is a sample database configuration object.
 
    <b>If the commands cannot be found, make sure you have set up the SQL Anywhere environment variables correctly.</b> For more information review the online documentation here[http://dcx.sybase.com/index.php#http%3A%2F%2Fdcx.sybase.com%2F1100en%2Fdbadmin_en11%2Fda-envvar-sect1-3672410.html].
 
-5. If you are using ActiveRecord 2.0.2, you must load the test tables. 
-
-      dbisql -c "eng=arunit;dbn=arunit;uid=dba;pwd=sql" sqlanywhere.sql
-      dbisql -c "eng=arunit;dbn=arunit2;uid=dba;pwd=sql" sqlanywhere2.sql
-
-   If you are using a newer version of ActiveRecord, this schema is automatically
-   migrated for you.
-
 6. Run the unit test suite from the ActiveRecord install directory:
 
       rake test_sqlanywhere
 
    <b>If the migration tests fail, make sure you have set up the SQL Anywhere environment variables correctly.</b> For more information review the online documentation here[http://dcx.sybase.com/index.php#http%3A%2F%2Fdcx.sybase.com%2F1100en%2Fdbadmin_en11%2Fda-envvar-sect1-3672410.html].
-
-==Explaination of Test Results
-
-As of ActiveRecord 2.2.2., it is expected that 6 tests will fail. The failed tests, along with an explaination, are identified below:
-
-1. (CalculationsTest) - test_should_sum_expression
-
-   Explaination: Appears to be an error in the test.
-   
-   This tests checks the results of the following statement:
-   
-      assert_equal '636', Account.sum("2 * credit_limit")
-   
-   According to the ActiveRecord documentation, the summation of a column should return a value of the same type as the column. In this case, <tt>credit_limit</tt> is an integer, and so the result should be a number type, not a string.
-   
-2. (MigrationTest) - test_add_table_with_decimals
-
-   Explaination: Requires special case.
-
-   From the comments regarding this test:
-
-      # This one is fun. The 'value_of_e' field is defined as 'DECIMAL' with
-      # precision/scale explicitly left out.  By the SQL standard, numbers
-      # assigned to this field should be truncated but that's seldom respected.
-   
-   There are already three special cases of this test. SQL Anywhere would require another special case to pass this test.
-
-3. (NamedScopeTest) - test_should_use_where_in_query_for_named_scope
-
-   Explaination: Appears to be an error in the test.
-
-   This test issues a query that returns two rows. Because there is no ORDER BY in the query, the order that that rows are returned in is non-deterministic. SQL Anywhere returns the correct rows, but in a different order.
-
-4. (QueryCacheTest) - test_cache_does_not_wrap_string_results_in_arrays
-
-   Explaination: Appears to be an error in the test.
-
-   This tests checks that the cached value of the following query is a string:
-
-      SELECT count(*) AS count_all FROM tasks
-
-   However, SQL Anywhere treats the values of a <tt>COUNT(*)</tt> opration as a fixnum, not a string. It would appear that the real intent of this test is to test that the value is NOT an array, rather than testing that the value is a string.
-
-5. (SchemaDumperTest) - test_schema_dump_includes_limit_constraint_for_integer_columns
-
-   Explaination: SQL Anywhere does not have a 'limitless' integer type.
-
-   Any integer type will be given an implicit limit when instantiated. It would be possible to use another type such as <tt>NUMERIC</tt> to mimic this type, however this seems like a bad idea.
-
-6. (ValidationsTest) - test_validate_case_sensitive_uniqueness
-
-   Explaination: By default, SQL Anywhere is case insensitive.
-
-   If a case sensitive database is required (as in this test), ensure the database is created with the <tt>-c</tt> switch to make it case sensitive.

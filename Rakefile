@@ -30,7 +30,7 @@ require 'rubygems/builder'
 PACKAGE_NAME = "activerecord-sqlanywhere-adapter"
 ARCH=Config::CONFIG['arch']
 
-pkg_version = "0.1.3"
+pkg_version = "1.0.0"
 
 spec = Gem::Specification.new do |spec|
   spec.authors = ["Eric Farrar"]
@@ -45,10 +45,10 @@ spec = Gem::Specification.new do |spec|
   spec.rubyforge_project = 'sqlanywhere'
   spec.homepage = 'http://sqlanywhere.rubyforge.org'  
   spec.files = Dir['lib/**/*.rb'] + Dir['test/**/*']
-  spec.required_ruby_version = '>= 1.8.6'
+  spec.required_ruby_version = '>= 1.9.2'
   spec.require_paths = ['lib']
-  spec.add_dependency('sqlanywhere', '>= 0.1.0')
-  spec.add_dependency('activerecord', '>= 2.0.2')
+  spec.add_dependency('sqlanywhere', '>= 0.1.5')
+  spec.add_dependency('activerecord', '>= 3.0.3')
   spec.rdoc_options << '--title' << 'ActiveRecord Driver for SQL Anywhere' <<
                        '--main' << 'README' <<
                        '--line-numbers'
@@ -59,7 +59,7 @@ desc "Build the gem"
 task :gem => ["activerecord-sqlanywhere-adapter-#{pkg_version}.gem"] do
 end
 
-file "activerecord-sqlanywhere-adapter-#{pkg_version}.gem" => ['lib/active_record/connection_adapters/sqlanywhere_adapter.rb', 'README', 'Rakefile'] do
+file "activerecord-sqlanywhere-adapter-#{pkg_version}.gem" => ['lib/active_record/connection_adapters/sqlanywhere_adapter.rb', 'README', 'Rakefile', 'lib/arel/visitors/sqlanywhere.rb'] do
    Gem::Builder.new(spec).build
 end
 
